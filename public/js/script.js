@@ -9,6 +9,11 @@
   var endpoint = script.getAttribute('data-api') || new URL(script.src).origin + '/api/event';
   var allowLocal = script.hasAttribute('data-allow-localhost');
   var cookieDomain = script.getAttribute('data-domain');
+  var excludedPaths = (script.getAttribute('data-exclude-paths') || '').split(',').filter(Boolean);
+  var safeQueries = script.hasAttribute('data-safe-queries');
+  function excluded() {
+    return excludedPaths.some(function (path) { return loc.pathname === path || loc.pathname.indexOf(path + '/') === 0; });
+  }
   var VID = 'ml_vid', SID = 'ml_sid', YEAR = 31536000, SESSION = 1800;
 
   var queued = (w.minilytics && w.minilytics.q) || [];
@@ -74,6 +79,11 @@
   function cleanUrl(href) {
     try {
       var u = new URL(href);
+      if (safeQueries) {
+        var allowed = /^(utm_(source|medium|campaign|term|content)|ref)$/;
+        Array.from(u.searchParams.keys()).forEach(function (key) { if (!allowed.test(key)) u.searchParams.delete(key); });
+        u.hash = '';
+      }
       var drop = [];
       u.searchParams.forEach(function (_, k) { if (PRIVATE_PARAM.test(k)) drop.push(k); });
       for (var i = 0; i < drop.length; i++) u.searchParams.delete(drop[i]);
@@ -81,6 +91,7 @@
     } catch (e) { return href; }
   }
   function send(type, extra, beacon) {
+    if (excluded()) return;
     var id = ids();
     var body = { w: siteId, t: type, u: cleanUrl(loc.href), vid: id.vid, sid: id.sid, sw: w.screen ? screen.width : 0 };
     for (var k in extra) if (extra[k] !== undefined) body[k] = extra[k];
@@ -113,12 +124,13 @@
   // ---- pageviews (including single-page-app navigation)
   var lastPage = null, firstView = true;
   function pageview() {
+    if (excluded()) { lastPage = null; return; }
     var page = loc.pathname + loc.search;
     if (page === lastPage) return;
     if (lastPage !== null) flushTime(false);
     lastPage = page;
     pings = 0;
-    send('pageview', { r: firstView ? d.referrer : '' });
+    send('pageview', { r: firstView ? (safeQueries && d.referrer ? new URL(d.referrer).origin : d.referrer) : '' });
     firstView = false;
   }
   var hist = w.history;

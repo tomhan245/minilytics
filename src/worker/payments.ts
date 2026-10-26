@@ -24,6 +24,7 @@ interface PaymentInput {
   name?: string | null;
   subscriptionId?: string | null;
   renewal?: boolean;
+  goal?: string;
 }
 
 export type MatchedBy = 'metadata' | 'return_page' | 'customer' | 'email' | 'timing';
@@ -171,6 +172,20 @@ export async function recordPayment(db: D1Database, site: Site, p: PaymentInput)
         p.subscriptionId ?? null,
       ),
   ];
+  // Save the conversion and payment atomically. Retried payments cannot inflate funnel goals.
+  if (p.goal && visitorId && sessionId) {
+    stmts.unshift(
+      db.prepare(
+        `INSERT INTO events (site_id, session_id, visitor_id, ts, type, name, path)
+         SELECT site_id, id, ?, ?, 'goal', ?, exit_page FROM sessions
+         WHERE site_id = ? AND id = ? AND NOT EXISTS (SELECT 1 FROM payments WHERE id = ?)`,
+      ).bind(visitorId, p.ts, p.goal, site.id, sessionId, p.id),
+      db.prepare(
+        `UPDATE sessions SET goals = goals + 1 WHERE site_id = ? AND id = ?
+         AND NOT EXISTS (SELECT 1 FROM payments WHERE id = ?)`,
+      ).bind(site.id, sessionId, p.id),
+    );
+  }
   // A payment tells us who an anonymous visitor really is.
   if (visitorId && p.kind === 'payment' && (p.email || p.name)) {
     stmts.push(
@@ -344,6 +359,7 @@ export async function handlePaymentApi(c: Context<AppEnv>) {
     email: str(b.email)?.toLowerCase() ?? null,
     name: str(b.name),
     renewal: b.renewal === true,
+    goal: str(b.goal)?.slice(0, 64) ?? undefined,
   });
   return c.json({ ok: true, attributed: !!res.sessionId, visitor_id: res.visitorId });
 }
