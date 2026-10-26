@@ -231,7 +231,7 @@ app.post('/api/sites/:id/funnels', async (c) => {
   const b = await c.req.json<{ name?: string; steps?: FunnelStep[] }>().catch(() => ({}) as { name?: string; steps?: FunnelStep[] });
   const steps = (b.steps ?? [])
     .filter((s) => (s.type === 'page' || s.type === 'goal') && typeof s.value === 'string' && s.value.trim())
-    .slice(0, 10)
+    .slice(0, 12)
     .map((s) => ({ type: s.type, value: s.value.trim().slice(0, 200) }));
   if (!b.name?.trim() || steps.length < 2) return c.json({ error: 'A funnel needs a name and at least 2 steps' }, 400);
   const id = randomId(8);

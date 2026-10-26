@@ -193,7 +193,7 @@ function FunnelForm({ onDone, canCancel }: { onDone: (id?: string) => void; canC
         </div>
       ))}
       <div className="flex gap-2">
-        <button type="button" className="btn" onClick={() => setSteps((s) => [...s, { type: 'page', value: '' }])} disabled={steps.length >= 10}>
+        <button type="button" className="btn" onClick={() => setSteps((s) => [...s, { type: 'page', value: '' }])} disabled={steps.length >= 12}>
           + Step
         </button>
         <button className="btn-dark">Save funnel</button>

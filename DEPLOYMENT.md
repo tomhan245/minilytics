@@ -9,6 +9,7 @@ This fork preserves the original Git history and our small integration patch:
 - `public/js/script.js`: optional private-route exclusions and safe URL query/referrer handling.
 - `src/worker/payments.ts`: an optional payment goal, stored atomically with revenue and deduplicated on retries.
 - `test/tracker.test.ts`: private-route and URL regression coverage.
+- `src/worker/index.ts` and `src/dashboard/components/GoalsPanel.tsx`: 12-step funnels, supporting CiteWing's nine landing sections followed by sign-in and checkout.
 - `wrangler.jsonc`: this instance's Worker/D1 configuration. The database ID is an identifier, not a credential.
 
 ## Upstream updates
