@@ -1,0 +1,53 @@
+name: Sync upstream
+
+on:
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-upstream
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Merge new upstream commits
+        id: upstream
+        run: |
+          git remote add upstream https://github.com/surendrapandar/minilytics.git
+          git fetch upstream main
+          if git merge-base --is-ancestor upstream/main HEAD; then
+            echo 'changed=false' >> "$GITHUB_OUTPUT"
+            echo 'Already includes upstream/main' >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git merge --no-edit upstream/main
+          echo 'changed=true' >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        if: steps.upstream.outputs.changed == 'true'
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Check the merged version
+        if: steps.upstream.outputs.changed == 'true'
+        run: |
+          npm ci
+          npm run typecheck
+          npm test
+          npm run build
+      - name: Save the checked merge
+        if: steps.upstream.outputs.changed == 'true'
+        run: |
+          git push origin HEAD:main
+          echo 'Merged upstream/main after typecheck, tests and build passed.' >> "$GITHUB_STEP_SUMMARY"
