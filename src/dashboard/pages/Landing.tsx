@@ -6,13 +6,25 @@ export const GITHUB_URL = 'https://github.com/surendrapandar/minilytics';
 
 const SPONSOR_CHECKOUT_URL = 'https://checkout.dodopayments.com/buy/pdt_0NqWPM98xzStsrTUMLyxE?quantity=1';
 
-// Open-source sponsors, same order as the README. The first one is shown largest.
+// Open-source sponsors, same order as the README.
 const SPONSORS = [
   {
     name: 'SnitchFeed',
     tagline: 'Agentic social listening for GTM: X, LinkedIn, Reddit & more',
     url: 'https://snitchfeed.com/?utm_source=minilytics&utm_medium=sponsorship&utm_campaign=oss-sponsor&utm_content=website',
     logo: '/sponsors/snitchfeed.png',
+  },
+  {
+    name: 'Open Source Alternatives',
+    tagline: 'Find Best Open Source Alternatives to Paid Software',
+    url: 'https://www.opensourcealternatives.to/?ref=minilytics-website',
+    logo: '/sponsors/opensourcealternatives.png',
+  },
+  {
+    name: 'Awesome Black Friday Deals',
+    tagline: 'Black Friday & Cyber Monday deals for devs & indie makers',
+    url: 'https://github.com/twf-nikhila/Awesome-Black-Friday-Cyber-Monday-deals',
+    logo: '/sponsors/black-friday-deals.png',
   },
   { name: 'DiskMate', tagline: 'Disk space analyzer & cleaner for Mac', url: 'https://diskmate.app/?ref=minilytics-website', logo: '/sponsors/diskmate.svg' },
   { name: 'PasteBuddy', tagline: 'Clipboard history for Mac', url: 'https://pastebuddy.app/?ref=minilytics-website', logo: '/sponsors/pastebuddy.svg' },
@@ -390,8 +402,8 @@ export function Landing() {
             Their support keeps Minilytics MIT-licensed and free to self-host for everyone. Go check out what they’re building.
           </p>
         </div>
-        <div className="mt-10 grid gap-4 sm:grid-cols-3">
-          {SPONSORS.map((s, i) => (
+        <div className="mt-10 grid grid-cols-2 gap-4 sm:grid-cols-3">
+          {SPONSORS.map((s) => (
             <a
               key={s.name}
               href={s.url}
@@ -399,14 +411,11 @@ export function Landing() {
               rel="noopener sponsored"
               data-ml-goal="sponsor_click"
               data-ml-goal-sponsor={s.name}
-              className={`card flex items-center gap-4 p-5 transition hover:-translate-y-0.5 hover:shadow-lg ${i === 0 ? 'sm:col-span-3 sm:p-6' : ''}`}
+              className="card flex flex-col items-center p-5 text-center transition hover:-translate-y-0.5 hover:shadow-lg sm:p-6"
             >
-              <img src={s.logo} alt="" width={i === 0 ? 56 : 44} height={i === 0 ? 56 : 44} loading="lazy" className="shrink-0 rounded-xl" />
-              <div className="min-w-0">
-                <div className={`font-semibold ${i === 0 ? 'text-lg' : ''}`}>{s.name}</div>
-                <div className="text-sm text-stone-600">{s.tagline}</div>
-              </div>
-              {i === 0 && <span className="ml-auto hidden shrink-0 text-sm font-medium text-stone-500 sm:inline">Visit {s.name} ↗</span>}
+              <img src={s.logo} alt="" width={56} height={56} loading="lazy" className="rounded-xl" />
+              <div className="mt-3 font-semibold">{s.name}</div>
+              <div className="mt-1 text-sm text-stone-600">{s.tagline}</div>
             </a>
           ))}
           <a
@@ -414,9 +423,11 @@ export function Landing() {
             target="_blank"
             rel="noopener"
             data-ml-goal="sponsor_cta"
-            className="flex items-center justify-center rounded-2xl border-2 border-dashed border-stone-200 p-5 text-sm text-stone-500 transition hover:border-stone-300 hover:text-ink"
+            className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-stone-200 p-5 text-center text-sm text-stone-500 transition hover:border-stone-300 hover:text-ink sm:p-6"
           >
-            Your logo here · Become a sponsor →
+            <span className="font-semibold text-ink">Your logo here</span>
+            <span className="mt-1">Reach indie hackers who self-host their analytics</span>
+            <span className="mt-3 font-medium">Become a sponsor →</span>
           </a>
         </div>
       </section>
