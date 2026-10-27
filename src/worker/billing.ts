@@ -8,32 +8,91 @@ const DAY = 86_400_000;
 // A few days of slack after a renewal date, so a late renewal webhook never cuts anyone off.
 const GRACE_MS = 3 * DAY;
 
+type Tier = { price: string; productId: string | null; spots: number };
+
+/**
+ * PLAN_TIERS="$29:5, $49:pdt_b:5, $100" — each tier sells its spots, then the next one starts. A tier
+ * without a product id can't be bought: a sold-out tier, or a coming price that is only announced.
+ */
+export function parseTiers(raw: string | undefined): Tier[] {
+  return (raw ?? '')
+    .split(',')
+    .map((t) => t.trim().split(':').map((x) => x.trim()))
+    .filter(([price]) => price)
+    .map(([price, ...rest]) => ({
+      price,
+      productId: rest.find((x) => /^pdt_[\w-]+$/.test(x)) ?? null,
+      spots: Number(rest.find((x) => /^\d+$/.test(x))) || 0,
+    }));
+}
+
+async function paidCount(env: Env) {
+  const r = await env.DB.prepare('SELECT COUNT(*) AS n FROM users WHERE paid_at IS NOT NULL').first<{ n: number }>();
+  return r?.n ?? 0;
+}
+
+/** The tier on sale now, how many of its spots are left, the price after it, and the tiers already sold out. */
+async function currentTier(env: Env) {
+  const tiers = parseTiers(env.PLAN_TIERS);
+  if (!tiers.some((t) => t.productId)) return null;
+  let before = await paidCount(env);
+  const soldOut: { price: string; spots: number }[] = [];
+  for (let i = 0; i < tiers.length; i++) {
+    const t = tiers[i];
+    const next = tiers[i + 1];
+    // Uncapped tiers never sell out. A capped tier stays on sale past its spots when the next price can't be bought yet.
+    if (!t.spots || before < t.spots || !next?.productId) {
+      if (!t.productId) break;
+      const capped = !!t.spots && before < t.spots;
+      return {
+        tier: t,
+        spots: capped ? t.spots : 0,
+        spotsLeft: capped ? t.spots - before : null,
+        nextPrice: next?.price ?? null,
+        soldOut,
+      };
+    }
+    soldOut.push({ price: t.price, spots: t.spots });
+    before -= t.spots;
+  }
+  return null;
+}
+
 /** Public plan info for the landing/pricing page. */
 export async function planInfo(env: Env) {
   const hosted = isHosted(env);
-  const spots = Number(env.PLAN_SPOTS) || 0;
-  let taken = 0;
-  if (hosted && spots) {
-    const r = await env.DB.prepare('SELECT COUNT(*) AS n FROM users WHERE paid_at IS NOT NULL').first<{ n: number }>();
-    taken = r?.n ?? 0;
+  const base = { hosted, interval: env.PLAN_INTERVAL || 'lifetime', supportEmail: env.SUPPORT_EMAIL || null };
+  const cur = hosted ? await currentTier(env) : null;
+  if (cur) {
+    const { tier, spots, spotsLeft, nextPrice, soldOut } = cur;
+    return { ...base, price: tier.price, spots, spotsLeft, nextPrice, soldOut, checkout: true };
   }
+  const spots = Number(env.PLAN_SPOTS) || 0;
+  const taken = hosted && spots ? await paidCount(env) : 0;
   return {
-    hosted,
+    ...base,
     price: env.PLAN_PRICE || '$29',
-    interval: env.PLAN_INTERVAL || 'lifetime',
     spots,
     spotsLeft: spots ? Math.max(0, spots - taken) : null,
     nextPrice: env.PLAN_NEXT_PRICE || null,
+    soldOut: [],
     checkout: !!env.PLAN_CHECKOUT_URL,
-    supportEmail: env.SUPPORT_EMAIL || null,
   };
 }
 
+/** Payment link of the tier on sale now, else PLAN_CHECKOUT_URL. Test-mode links keep their test host. */
+async function checkoutUrl(env: Env) {
+  const cur = await currentTier(env);
+  if (!cur) return env.PLAN_CHECKOUT_URL ? new URL(env.PLAN_CHECKOUT_URL) : null;
+  const origin = env.PLAN_CHECKOUT_URL ? new URL(env.PLAN_CHECKOUT_URL).origin : 'https://checkout.dodopayments.com';
+  return new URL(`${origin}/buy/${cur.tier.productId}?quantity=1`);
+}
+
 /** GET /api/billing/checkout: send the signed-in user to the Dodo payment link, tagged with their account. */
-export function checkout(c: Context<AppEnv>) {
+export async function checkout(c: Context<AppEnv>) {
   const user = c.get('user');
-  if (!c.env.PLAN_CHECKOUT_URL) return c.json({ error: 'Billing is not configured yet' }, 503);
-  const url = new URL(c.env.PLAN_CHECKOUT_URL);
+  const url = await checkoutUrl(c.env);
+  if (!url) return c.json({ error: 'Billing is not configured yet' }, 503);
   url.searchParams.set('metadata_user_id', user.id);
   if (user.email) {
     url.searchParams.set('email', user.email);
@@ -83,8 +142,9 @@ export async function billingWebhook(c: Context<AppEnv>) {
     }
     return c.json({ ok: true });
   }
-  // The same Dodo account may sell other products (your apps); only the plan product matters here.
-  if (c.env.PLAN_PRODUCT_ID && !productIds.includes(c.env.PLAN_PRODUCT_ID)) return c.json({ ok: true, ignored: 'other product' });
+  // The same Dodo account may sell other products (your apps); only the plan products (every tier) matter here.
+  const planIds = [c.env.PLAN_PRODUCT_ID, ...parseTiers(c.env.PLAN_TIERS).map((t) => t.productId)].filter(Boolean) as string[];
+  if (planIds.length && !productIds.some((id) => planIds.includes(id))) return c.json({ ok: true, ignored: 'other product' });
 
   const meta = { ...(d.customer?.metadata ?? {}), ...(d.metadata ?? {}) } as Record<string, unknown>;
   const email = (str(d.customer?.email) ?? str(meta.user_email))?.toLowerCase() ?? null;
